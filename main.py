@@ -1,19 +1,20 @@
 import os
-from pathlib import Path
+import string
+import tempfile
 import threading
 import tkinter as tk
 from collections import defaultdict
+from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from typing import List, Tuple
+from tika import parser as tika_parser
 
 import openpyxl
+from PyPDF2 import PdfReader, PdfWriter
 
-from lib.excel_io import write_rules_sheet_openpyxl
-from lib.excel_io import (
-    write_summary_section_openpyxl,
-    write_transactions_sheet_openpyxl,
-)
-
+from lib.excel_io import (write_rules_sheet_openpyxl,
+                          write_summary_section_openpyxl,
+                          write_transactions_sheet_openpyxl)
 from lib.translations import get_translation
 from parsers import BaseParser, Transaction, registry
 
@@ -30,6 +31,19 @@ def load_rules(path: str) -> List[Tuple[str, str]]:
     return loaded
 
 
+def decrypt_pdf(input_path, output_path, password):
+    with open(input_path, "rb") as input_file, open(output_path, "wb") as output_file:
+        reader = PdfReader(input_file)
+        reader.decrypt(password)
+
+        writer = PdfWriter()
+
+        for i in range(len(reader.pages)):
+            writer.add_page(reader.pages[i])
+
+        writer.write(output_file)
+
+
 def process_pdf_to_excel(
     pdf_path: str,
     parser_instance: BaseParser,
@@ -37,7 +51,6 @@ def process_pdf_to_excel(
     output_path: str,
     existing_excel: str = None,
     sheet_name: str = "Tranzactii",
-    use_rules: bool = True,
     language: str = "en",
 ) -> Tuple[bool, str]:
     """Process PDF and create/update Excel file with transactions"""
@@ -59,14 +72,17 @@ def process_pdf_to_excel(
         workbook, sheet_name, columns, transactions, rules, language
     )
 
-    if use_rules and rules:
+    if rules:
         write_rules_sheet_openpyxl(workbook, rules, language)
 
     # summary: write to the transactions worksheet
     trans_ws = workbook[sheet_name]
     write_summary_section_openpyxl(
         trans_ws,
-        [{"months": k, "sum": v} for k, v in rate_buckets.items()],
+        [
+            {"months": k + 1, "sum": v}
+            for k, v in sorted(rate_buckets.items(), key=lambda x: x[0])
+        ],
         len(columns) + 3,
         language,
     )
@@ -108,7 +124,7 @@ def compute_summary(transactions: List[Transaction]) -> Tuple[dict, float, float
 
 class ParserGUI:
     """Tkinter GUI for PDF parser application"""
-
+    __readable_pdf_path: Path = None
     def __init__(self):
         self.root = tk.Tk()
         self.root.title(get_translation("app_title", "en"))
@@ -190,7 +206,12 @@ class ParserGUI:
         style.configure("TFrame", background=bg)
 
         # Header
-        style.configure("Header.TLabel", font=("Segoe UI", 16, "bold"), background=card_bg, foreground=accent_dark)
+        style.configure(
+            "Header.TLabel",
+            font=("Segoe UI", 16, "bold"),
+            background=card_bg,
+            foreground=accent_dark,
+        )
 
         # Labels and entries
         style.configure("TLabel", font=("Segoe UI", 10), background=card_bg)
@@ -198,10 +219,17 @@ class ParserGUI:
 
         # Buttons
         style.configure("TButton", font=("Segoe UI", 10))
-        style.configure("Accent.TButton", font=("Segoe UI", 10, "bold"), foreground="#ffffff", background=accent)
-        style.map("Accent.TButton",
-                  foreground=[('active', '#ffffff')],
-                  background=[('active', accent_dark), ('!disabled', accent)])
+        style.configure(
+            "Accent.TButton",
+            font=("Segoe UI", 10, "bold"),
+            foreground="#ffffff",
+            background=accent,
+        )
+        style.map(
+            "Accent.TButton",
+            foreground=[("active", "#ffffff")],
+            background=[("active", accent_dark), ("!disabled", accent)],
+        )
 
         # Process button gets an accent style
         style.configure("Process.TButton", parent="Accent.TButton")
@@ -296,7 +324,7 @@ class ParserGUI:
         excel_label.trans_key = "excel_file"
         excel_label.grid(row=row, column=0, sticky=tk.W, pady=4)
         self.excel_label = excel_label
-        
+
         excel_frame = ttk.Frame(main_frame)
         self.excel_frame = excel_frame
         excel_frame.grid(row=row, column=1, sticky=(tk.W, tk.E), pady=5)
@@ -405,6 +433,10 @@ class ParserGUI:
         if filename:
             def background_proc():
                 self.pdf_path.set(filename)
+                pdf_path = Path(filename)
+                self.sheet_name_var.set(
+                    pdf_path.name.replace(".pdf", "").strip(string.digits)
+                )
                 # Auto-detect parser
                 detected_parser = registry.auto_detect_parser(filename)
                 if detected_parser:
@@ -414,8 +446,11 @@ class ParserGUI:
                     )
                 else:
                     self.log_message(
-                        get_translation("could_not_auto_detect", self.language_var.get())
+                        get_translation(
+                            "could_not_auto_detect", self.language_var.get()
+                        )
                     )
+
             threading.Thread(target=background_proc).start()
 
     def browse_excel(self):
@@ -429,7 +464,6 @@ class ParserGUI:
             # Auto-set output path to the same file
             self.output_path.set(filename)
             self._update_output_visibility()
-            # No rules UI to populate; rules will be read from workbook (or rules.csv) at processing time
 
     def _update_output_visibility(self):
         """Show/hide the existing-file vs output-file widgets based on the checkbox state.
@@ -446,19 +480,19 @@ class ParserGUI:
         else:
             to_show = ["output_label", "output_frame"]
             to_remove = ["excel_frame", "excel_label"]
-        
+
         for i in to_remove:
             try:
                 getattr(self, i).grid_remove()
             except Exception:
                 pass
-    
+
         for i in to_show:
             try:
                 getattr(self, i).grid()
             except Exception:
                 pass
-    
+
     def clear_excel(self):
         """Clear Excel file selection"""
         self.excel_path.set("")
@@ -483,6 +517,44 @@ class ParserGUI:
         self.status_text.see(tk.END)
         self.status_text.config(state="disabled")
         self.root.update_idletasks()
+
+    def ask_password(self, title: str = None, prompt: str = None) -> str | None:
+        """Show modal password dialog and return entered password or None."""
+        title = title or get_translation("password", self.language_var.get())
+        prompt = prompt or get_translation("enter_password", self.language_var.get())
+
+        result = {"pwd": None}
+
+        dlg = tk.Toplevel(self.root)
+        dlg.title(title)
+        dlg.transient(self.root)
+        dlg.resizable(False, False)
+        dlg.grab_set()
+
+        frm = ttk.Frame(dlg, padding=12)
+        frm.grid(row=0, column=0, sticky="nsew")
+
+        ttk.Label(frm, text=prompt).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 8))
+
+        pwd_var = tk.StringVar()
+        entry = ttk.Entry(frm, textvariable=pwd_var, show="*")
+        entry.grid(row=1, column=0, columnspan=2, sticky="we", pady=(0, 8))
+        entry.focus_set()
+
+        def on_ok():
+            result["pwd"] = pwd_var.get()
+            dlg.destroy()
+
+        def on_cancel():
+            dlg.destroy()
+
+        ok_btn = ttk.Button(frm, text=get_translation("ok", self.language_var.get()), command=on_ok)
+        ok_btn.grid(row=2, column=0, sticky="e", padx=(0, 6))
+        cancel_btn = ttk.Button(frm, text=get_translation("cancel", self.language_var.get()), command=on_cancel)
+        cancel_btn.grid(row=2, column=1, sticky="w")
+
+        dlg.wait_window()
+        return result["pwd"]
 
     def process_pdf(self):
         """Process the PDF file"""
@@ -531,56 +603,36 @@ class ParserGUI:
     def _process_pdf_thread(self):
         """Process PDF in separate thread"""
         try:
+            pdf_path = self.pdf_path.get()
+            try:
+                result = tika_parser.from_file(pdf_path)
+                if result["content"] == None:
+                    raise ValueError("No content")
+            except:
+                print("Could not parse; using decryptor")
+                fd, tmp_fpath = tempfile.mkstemp(suffix=".pdf")
+                os.close(fd)
+                pwd = self.ask_password(prompt=get_translation("pdf_password", self.language_var.get()))
+                if pwd:
+                    decrypt_pdf(pdf_path, tmp_fpath, pwd)
+                    pdf_path = tmp_fpath
+                else:
+                    self.log_message(get_translation("password_cancelled", self.language_var.get()))
             # Get parser instance
             parser_instance = registry.create_parser(self.selected_parser.get())
-
-            # Load rules from the workbook (preferred) or rules.csv fallback
-            rules = []
-            wb_path = self.excel_path.get() if self.excel_path.get() else None
-            if wb_path and os.path.exists(wb_path):
-                try:
-                    import openpyxl
-
-                    wb = openpyxl.load_workbook(wb_path, data_only=True)
-                    if "Rules" in wb.sheetnames:
-                        ws = wb["Rules"]
-                        for row in ws.iter_rows(min_row=2, values_only=True):
-                            if not row:
-                                continue
-                            p = row[0] or ""
-                            c = row[1] or ""
-                            if p and c:
-                                rules.append((str(p), str(c)))
-                except Exception:
-                    # fallback to rules.csv below
-                    pass
-
-            if not rules:
-                # fallback to rules.csv in current directory
-                try:
-                    rules_path = Path(__file__).parent / "rules.csv"
-                    rules = load_rules(rules_path)
-                except Exception:
-                    rules = []
-
-            use_rules_flag = bool(rules)
-            self.log_message(
-                get_translation("loaded_rules", self.language_var.get()).format(
-                    len(rules), use_rules_flag, False
-                )
-            )
+            
+            rules_path = Path(__file__).parent / "rules.csv"
+            rules = load_rules(rules_path)
 
             # Process PDF
             existing_excel = self.excel_path.get() if self.excel_path.get() else None
             success, message = process_pdf_to_excel(
-                self.pdf_path.get(),
+                pdf_path,
                 parser_instance,
                 rules,
                 self.output_path.get(),
                 existing_excel,
                 sheet_name=self.sheet_name_var.get(),
-                # clear_existing option removed
-                use_rules=use_rules_flag,
                 language=self.language_var.get(),
             )
 
