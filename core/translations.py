@@ -107,7 +107,7 @@ TRANSLATIONS = {
         "openpyxl_required": "openpyxl este necesar pentru modificarea fișierelor Excel existente. Instalați cu: pip install openpyxl",
         "failed_to_update_excel": "Eșec la actualizarea fișierului Excel: {}",
         "pdf_password": "Introduceți parola pentru a decripta fișierul PDF",
-        "password_cancelled": "Parolă incorectă"
+        "password_cancelled": "Parolă incorectă",
     },
 }
 

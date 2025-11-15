@@ -1,7 +1,7 @@
 import re
 from typing import List
 
-from tika import parser
+from core.utils import pdf_to_text
 
 from . import BaseParser, Transaction
 
@@ -13,17 +13,16 @@ AMOUNT_RE = r"[\d\.,]+"
 
 # Heuristic block regex similar to the one used in main2.py
 BLOCK_RE = re.compile(
-    rf"""
-    (?P<header_date>{DATE_REGEX})      # first date (sometimes present)
-    \s*\n\s*\n?
-    (?P<date>{DATE_REGEX})            # transaction date (the one we want)
-    \s*\n
-    (?P<info>.*?)                  # details (non-greedy, can include newlines)
-    \n
-    (?P<ref>\d+?)                  # reference token (non-space)
-    \s*\n
-    (?P<number>[A-Z\d]+)\s*(?P<sign>[-+])\s*(?P<amount>{AMOUNT_RE})  # number, sign, amount
-    """,
+    f"(?P<header_date>{DATE_REGEX})"  # first date (sometimes present)
+    r"\s*\n\s*\n?"
+    rf"(?P<date>{DATE_REGEX})"  # transaction date (the one we want)
+    r"\s*\n"
+    r"(?P<info>.*?)"  # details (non-greedy, can include newlines)
+    r"\n"
+    r"(?P<ref>\d+?)"  # reference token (non-space)
+    r"\s*\n"
+    r"(?P<number>[A-Z]{2,}\d+)\s*(?P<sign>[-+])?\s*"
+    f"(?P<amount>{AMOUNT_RE})",
     re.DOTALL | re.VERBOSE,
 )
 
@@ -39,26 +38,26 @@ class CecParser(BaseParser):
 
     def validate_pdf(self, pdf_path: str) -> bool:
         try:
-            raw = parser.from_file(pdf_path)
+            raw = pdf_to_text(pdf_path)
             content = raw.get("content", "") or ""
             content_upper = content.upper()
             cec_indicators = ["CEC", "CASA DE ECONOMII", "EXTRAS DE CONT", "RON"]
             matches = sum(
                 1 for indicator in cec_indicators if indicator in content_upper
             )
-            date_matches = len(re.findall(DATE_REGEX, content))
+            date_matches = len
+            (re.findall(DATE_REGEX, content))
             return matches >= 2 and date_matches > 0
         except Exception:
             return False
 
     def parse_pdf(self, pdf_path: str) -> List[Transaction]:
-        raw = parser.from_file(pdf_path)
-        content = raw.get("content", "") or ""
+        content = pdf_to_text(pdf_path)
         return self.parse_text(content)
 
     def get_columns(self, language: str = "en"):
         # columns: key, header label
-        from lib.translations import get_translation
+        from core.translations import get_translation
 
         return [
             ("date", get_translation("data", language)),
@@ -73,7 +72,7 @@ class CecParser(BaseParser):
         ]
 
     @staticmethod
-    def _normalize_amount(s: str) -> float:
+    def __normalize_amount(s: str) -> float:
         return float(s.replace(",", "").replace(".", "").strip()) / 100.0
 
     def parse_text(self, text: str) -> List[Transaction]:
@@ -85,20 +84,20 @@ class CecParser(BaseParser):
             ref = m.group("ref").strip()
             number = m.group("number")
             sign = m.group("sign")
-            amount = self._normalize_amount(m.group("amount"))
+            amount = self.__normalize_amount(m.group("amount"))
 
             installment_match = RATA_REGEX.search(info)
             if installment_match:
                 installment = int(installment_match.group(1))
                 installment_count = int(installment_match.group(2))
             else:
-                installment = 0
-                installment_count = 0
+                installment = None
+                installment_count = None
 
             transaction_total = 0.0
             total_match = TOTAL_TRANZACTIE_REGEX.search(info)
             if total_match:
-                transaction_total = self._normalize_amount(total_match.group(1))
+                transaction_total = self.__normalize_amount(total_match.group(1))
 
             # Extract merchant/vendor name
             try:

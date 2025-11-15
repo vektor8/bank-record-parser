@@ -77,7 +77,7 @@ class BaseParser(ABC):
         returns the canonical columns used by the app.
         """
         # import lazily to avoid circular imports
-        from lib.translations import get_translation
+        from core.translations import get_translation
 
         return [
             ("date", get_translation("data", language)),
@@ -107,7 +107,7 @@ class ParserRegistry:
             if filename.endswith(".py") and filename != "__init__.py":
                 module_name = filename[:-3]
                 try:
-                    module = importlib.import_module(f"parsers.{module_name}")
+                    module = importlib.import_module(f"core.parsers.{module_name}")
 
                     # Find all classes that inherit from BaseParser
                     for name, obj in inspect.getmembers(module, inspect.isclass):

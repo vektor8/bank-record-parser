@@ -1,8 +1,5 @@
 pyinstaller --noconfirm --onefile --windowed --name cec_parser `
-  --add-data "rules.csv;." `
-  --add-data "lib;lib" `
-  --add-data "parsers;parsers" `
-  --hidden-import=parsers.cec_parsers `
-  --hidden-import=tika `
-  --hidden-import=PyPDF2 `
+  --add-data "data;data" `
+  --add-data "core;core" `
+  --add-data "forest-theme;forest-theme" `
   main.py

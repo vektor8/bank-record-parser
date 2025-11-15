@@ -119,7 +119,7 @@ def write_transactions_sheet_openpyxl(
             cat_index = col_names.index(category_label)
             if cat_index is not None:
                 formula = f"=INDEX(Rules[{rules_category_label}],MATCH(1,INDEX(--ISNUMBER(SEARCH(INDEX(Rules[{pattern_label}],0),@[{store_label}])),0),0))"
-                
+
                 try:
                     table.tableColumns[cat_index].calculatedColumnFormula = formula
                 except Exception:

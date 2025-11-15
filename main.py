@@ -7,41 +7,17 @@ from collections import defaultdict
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from typing import List, Tuple
-from tika import parser as tika_parser
 
 import openpyxl
-from PyPDF2 import PdfReader, PdfWriter
 
-from lib.excel_io import (write_rules_sheet_openpyxl,
-                          write_summary_section_openpyxl,
-                          write_transactions_sheet_openpyxl)
-from lib.translations import get_translation
-from parsers import BaseParser, Transaction, registry
-
-
-def load_rules(path: str) -> List[Tuple[str, str]]:
-    """Load rules from CSV or TXT file"""
-    loaded: List[Tuple[str, str]] = []
-    with open(path, "r") as f:
-        for line in f.readlines():
-            elements = line.split(",")
-            if len(elements) < 2:
-                raise ValueError("Bad rules file")
-            loaded.append((elements[0], elements[1]))
-    return loaded
-
-
-def decrypt_pdf(input_path, output_path, password):
-    with open(input_path, "rb") as input_file, open(output_path, "wb") as output_file:
-        reader = PdfReader(input_file)
-        reader.decrypt(password)
-
-        writer = PdfWriter()
-
-        for i in range(len(reader.pages)):
-            writer.add_page(reader.pages[i])
-
-        writer.write(output_file)
+from core.excel_io import (
+    write_rules_sheet_openpyxl,
+    write_summary_section_openpyxl,
+    write_transactions_sheet_openpyxl,
+)
+from core.translations import get_translation
+from core.utils import decrypt_pdf, load_rules, pdf_to_text
+from core.parsers import BaseParser, Transaction, registry
 
 
 def process_pdf_to_excel(
@@ -124,21 +100,23 @@ def compute_summary(transactions: List[Transaction]) -> Tuple[dict, float, float
 
 class ParserGUI:
     """Tkinter GUI for PDF parser application"""
+
     __readable_pdf_path: Path = None
+
     def __init__(self):
         self.root = tk.Tk()
         self.root.title(get_translation("app_title", "en"))
         self.root.geometry("600x500")
 
         # Initialize variables
-        self._init_variables()
+        self.__init_variables()
 
         # Available parsers
         self.parsers = registry.get_parsers()
 
-        self.setup_ui()
+        self.__setup_ui()
 
-    def _init_variables(self):
+    def __init_variables(self):
         """Initialize all GUI variables"""
         self.pdf_path = tk.StringVar()
         self.excel_path = tk.StringVar()
@@ -156,9 +134,9 @@ class ParserGUI:
         self.root.title(get_translation("app_title", current_lang))
         # Walk the widget tree and update any widgets that declare a trans_key or trans_heading
         for widget in self.root.winfo_children():
-            self._update_widget_text(widget, current_lang)
+            self.__update_widget_text(widget, current_lang)
 
-    def _update_widget_text(self, widget, language):
+    def __update_widget_text(self, widget, language):
         """Recursively update widget text based on language"""
         # First update this widget if it has an explicit translation key
         try:
@@ -178,66 +156,15 @@ class ParserGUI:
         # Recurse into children
         if hasattr(widget, "winfo_children"):
             for child in widget.winfo_children():
-                self._update_widget_text(child, language)
+                self.__update_widget_text(child, language)
 
-    def setup_ui(self):
+    def __setup_ui(self):
         """Setup the user interface"""
-        # Apply theme and refined styles
-        style = ttk.Style()
-        try:
-            style.theme_use("clam")
-        except Exception:
-            pass
-
-        # Color palette
-        bg = "#f4f7fb"  # overall background
-        card_bg = "#ffffff"
-        accent = "#0a66c2"
-        accent_dark = "#084f92"
-
-        # Root bg
-        try:
-            self.root.configure(background=bg)
-        except Exception:
-            pass
-
-        # Card frame style
-        style.configure("Card.TFrame", background=card_bg, relief="flat")
-        style.configure("TFrame", background=bg)
-
-        # Header
-        style.configure(
-            "Header.TLabel",
-            font=("Segoe UI", 16, "bold"),
-            background=card_bg,
-            foreground=accent_dark,
-        )
-
-        # Labels and entries
-        style.configure("TLabel", font=("Segoe UI", 10), background=card_bg)
-        style.configure("TEntry", fieldbackground="#fbfdff")
-
-        # Buttons
-        style.configure("TButton", font=("Segoe UI", 10))
-        style.configure(
-            "Accent.TButton",
-            font=("Segoe UI", 10, "bold"),
-            foreground="#ffffff",
-            background=accent,
-        )
-        style.map(
-            "Accent.TButton",
-            foreground=[("active", "#ffffff")],
-            background=[("active", accent_dark), ("!disabled", accent)],
-        )
-
-        # Process button gets an accent style
-        style.configure("Process.TButton", parent="Accent.TButton")
-
-        # Status text styling (use direct tk config later)
+        self.root.tk.call("source", "./forest-theme/forest-light.tcl")
+        ttk.Style().theme_use("forest-light")
 
         # Main frame (card)
-        main_frame = ttk.Frame(self.root, padding=16, style="Card.TFrame")
+        main_frame = ttk.Frame(self.root, style="Card", padding=16)
         main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
 
         # Configure grid weights
@@ -251,23 +178,25 @@ class ParserGUI:
         header = ttk.Label(
             main_frame,
             text=get_translation("app_title", self.language_var.get()),
-            style="Header.TLabel",
         )
         header.trans_key = "app_title"
-        header.grid(row=row, column=0, columnspan=3, sticky=(tk.W), pady=(0, 10))
-        row += 1
-
-        # Language Selection
-        ttk.Label(main_frame, text="Language:").grid(
-            row=row, column=0, sticky=tk.W, pady=4
+        header.grid(
+            row=row, column=0, columnspan=3, sticky=(tk.W), pady=(0, 10), padx=(10, 10)
         )
+        # row += 1
+
+        # # Language Selection
+        # ttk.Label(main_frame, text="Language:").grid(
+        #     row=row, column=0, sticky=tk.W, pady=4
+        # )
         language_combo = ttk.Combobox(
             main_frame,
             textvariable=self.language_var,
             values=["en", "ro"],
             state="readonly",
         )
-        language_combo.grid(row=row, column=1, sticky=(tk.W, tk.E), pady=5)
+        language_combo.grid(row=row, column=1, sticky=(tk.E))
+        # language_combo.pack(side=tk.BOTTOM)
         language_combo.bind("<<ComboboxSelected>>", lambda e: self.update_ui_language())
         row += 1
 
@@ -393,7 +322,6 @@ class ParserGUI:
             main_frame,
             text=get_translation("process_pdf", self.language_var.get()),
             command=self.process_pdf,
-            style="Process.TButton",
         )
         self.process_btn.trans_key = "process_pdf"
         self.process_btn.grid(
@@ -431,6 +359,7 @@ class ParserGUI:
             filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")],
         )
         if filename:
+
             def background_proc():
                 self.pdf_path.set(filename)
                 pdf_path = Path(filename)
@@ -534,7 +463,9 @@ class ParserGUI:
         frm = ttk.Frame(dlg, padding=12)
         frm.grid(row=0, column=0, sticky="nsew")
 
-        ttk.Label(frm, text=prompt).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 8))
+        ttk.Label(frm, text=prompt).grid(
+            row=0, column=0, columnspan=2, sticky="w", pady=(0, 8)
+        )
 
         pwd_var = tk.StringVar()
         entry = ttk.Entry(frm, textvariable=pwd_var, show="*")
@@ -548,9 +479,15 @@ class ParserGUI:
         def on_cancel():
             dlg.destroy()
 
-        ok_btn = ttk.Button(frm, text=get_translation("ok", self.language_var.get()), command=on_ok)
+        ok_btn = ttk.Button(
+            frm, text=get_translation("ok", self.language_var.get()), command=on_ok
+        )
         ok_btn.grid(row=2, column=0, sticky="e", padx=(0, 6))
-        cancel_btn = ttk.Button(frm, text=get_translation("cancel", self.language_var.get()), command=on_cancel)
+        cancel_btn = ttk.Button(
+            frm,
+            text=get_translation("cancel", self.language_var.get()),
+            command=on_cancel,
+        )
         cancel_btn.grid(row=2, column=1, sticky="w")
 
         dlg.wait_window()
@@ -596,32 +533,42 @@ class ParserGUI:
         )
 
         # Run processing in separate thread
-        thread = threading.Thread(target=self._process_pdf_thread)
-        thread.daemon = True
-        thread.start()
+        # thread = threading.Thread(target=self._process_pdf_thread)
+        self._process_pdf_thread()
+        # thread.daemon = True
+        # thread.start()
 
     def _process_pdf_thread(self):
         """Process PDF in separate thread"""
+        delete_temp_file = False
         try:
             pdf_path = self.pdf_path.get()
             try:
-                result = tika_parser.from_file(pdf_path)
-                if result["content"] == None:
-                    raise ValueError("No content")
+                result = pdf_to_text(pdf_path)
             except:
                 print("Could not parse; using decryptor")
                 fd, tmp_fpath = tempfile.mkstemp(suffix=".pdf")
                 os.close(fd)
-                pwd = self.ask_password(prompt=get_translation("pdf_password", self.language_var.get()))
+                pwd = self.ask_password(
+                    prompt=get_translation("pdf_password", self.language_var.get())
+                )
                 if pwd:
                     decrypt_pdf(pdf_path, tmp_fpath, pwd)
                     pdf_path = tmp_fpath
+                    delete_temp_file = True
                 else:
-                    self.log_message(get_translation("password_cancelled", self.language_var.get()))
+                    self.log_message(
+                        get_translation("password_cancelled", self.language_var.get())
+                    )
             # Get parser instance
             parser_instance = registry.create_parser(self.selected_parser.get())
-            
-            rules_path = Path(__file__).parent / "rules.csv"
+
+            rules_path = (
+                Path(__file__).parent
+                / "data"
+                / "rules"
+                / f"{self.language_var.get()}.csv"
+            )
             rules = load_rules(rules_path)
 
             # Process PDF
@@ -648,7 +595,8 @@ class ParserGUI:
                     get_translation("error", self.language_var.get()),
                     f"{get_translation('failed_to_process_pdf', self.language_var.get())}\n\n{message}",
                 )
-
+            if delete_temp_file:
+                os.remove(tmp_fpath)
         except Exception as e:
             error_msg = get_translation(
                 "unexpected_error", self.language_var.get()
