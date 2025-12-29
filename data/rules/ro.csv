@@ -1,44 +1,44 @@
-Bolt Services*,Food
+Bolt Services*,Restaurant
 BOLT*,Transport
 UBR*,Transport
-*KAUFLAND*,Groceries
-SEPHORA*,Beauty
-STYL*,Jewelery
-VITRIN MODASTIL*,Suits
+*KAUFLAND*,Alimente
+SEPHORA*,Cosmetice
+STYL*,Bijuterii
+VITRIN MODASTIL*,Costume
 *f64.ro,Foto
-CARREFOUR*,Groceries
-Vivo Street Food,Food
-Selgros*,Groceries
-OMV*,Fuel
-MOL *,Fuel
-*MCDONALD*,Food
-*KFC*,Food
-ZARA*,Clothing
-SINSAY*,Clothing
-easybox Sameday,Shopping
-GAZETTO CAFE C2,Food
-HELP NET,Medicine
-Synevo,Medicine
+CARREFOUR*,Alimente
+Vivo Street Food,Restaurant
+Selgros*,Alimente
+OMV*,Combustibil
+MOL *,Combustibil
+*MCDONALD*,Restaurant
+*KFC*,Restaurant
+ZARA*,Haine
+SINSAY*,Haine
+easybox Sameday,
+GAZETTO CAFE C2,Restaurant
+HELP NET,Farmacie
+Synevo,Farmacie
 DECATHLON*,Sport
-CATENA*,Medicine
-Hotel at Booking.com,Holiday
+CATENA*,Farmacie
+Hotel at Booking.com,Vacanță
 INTERSPORT*,Sport
-JUMBO*,Shopping
-CHOUSE GALATI,Food
-B&B*,Jewelery
-DEDEMAN,House
+JUMBO*,Cumparaturi
+CHOUSE GALATI,Restaurant
+B&B*,Bijuterii
+DEDEMAN,Casa
 PTP ONLINE,Transport
-RESTAURANT TRAI,Food
-ALT CONTROL COMPUTER,Homelab
-OSCAR FOOD SRL,Food
-PROFI,Groceries
+RESTAURANT TRAI,Restaurant
+ALT CONTROL COMPUTER,Echipament IT
+OSCAR FOOD SRL,Restaurant
+PROFI,Alimente
 SNTFC CFR Calatori S,Transport
-BIJUTERIE PALAS IA,Jewelery
-COFETARIA DANA,Food
-MINISO*,Shopping
-PENTI,Clothing
-*pcgarage.ro,Homelab
-SMILE ACADEMY,Dental
-*gotica.ro,Clothing
+BIJUTERIE PALAS IA,Bijuterii
+COFETARIA DANA,Restaurant
+MINISO*,Cumparaturi
+PENTI,Haine
+*pcgarage.ro,Echipament IT
+SMILE ACADEMY,Stomatologie
+*gotica.ro,Haine
 GOOGLE*,Digital
-CCC *,Clothing
+CCC *,Haine
